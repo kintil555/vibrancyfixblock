@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Validate dependency versions are configured
+        run: |
+          if grep -q "REPLACE_ME_SEE_README" gradle.properties; then
+            echo "::error::gradle.properties still has REPLACE_ME_SEE_README placeholders." \
+                 "See the README's 'Building it yourself' section: you must fill in" \
+                 "vibrancy_version, sodium_version, and big_shot_lib_version with the" \
+                 "actual Modrinth version numbers before this can build."
+            exit 1
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibrancyfixblock
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          generate_release_notes: true
