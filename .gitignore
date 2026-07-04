@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Loom / run directories
+run/
+
+# Env files (Modrinth/Curseforge publish tokens, etc.)
+.env
