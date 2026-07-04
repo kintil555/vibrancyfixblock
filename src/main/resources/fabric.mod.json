@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "vibrancyfixblock",
+  "version": "${version}",
+  "name": "Vibrancy Light Fix",
+  "description": "Fixes Vibrancy's raytraced block lights (e.g. sea lanterns) keeping a stale shadow/light after a neighbouring block is destroyed, by forcing the light's occluder mesh to rebuild on every block change instead of relying on Vibrancy's dirty-section tracking.",
+  "authors": [
+    "kintil555"
+  ],
+  "contact": {
+    "homepage": "https://github.com/kintil555/vibrancyfixblock",
+    "sources": "https://github.com/kintil555/vibrancyfixblock",
+    "issues": "https://github.com/kintil555/vibrancyfixblock/issues"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {},
+  "mixins": [
+    "vibrancyfixblock.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "fabric-api": "*",
+    "minecraft": "1.21.11",
+    "vibrancy": "*",
+    "sodium": "*",
+    "big_shot_lib": "*"
+  }
+}
