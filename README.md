@@ -12,27 +12,24 @@ replace the sea lantern itself, which forces Vibrancy to fully recreate its ligh
 
 ## Root cause
 
-Vibrancy's raytraced point lights (`RayPointLight`) bake a **static** shadow-occluder mesh once,
-and only queue a rebuild (`queueMesh()`) when `LightManager.dirtySections` reports that a nearby
-chunk section was re-meshed by Sodium **and** that light already considered that section relevant.
-That chain depends on Sodium's mesh-rebuild mixin hook firing for the right section in the right
-frame — in some cases (e.g. certain neighbour-block removals) it doesn't, so the occluder mesh
-never gets marked dirty and the old geometry keeps being used for shadow casting.
-
-Destroying and replacing the light source works around this because it goes through a completely
-different path (`LightManager.blockChanged` → remove + recreate the `RayPointLight` from scratch,
-building a brand new mesh).
+Vibrancy's raytraced point lights (`RayPointLight`) bake a shadow-occluder mesh
+(`AsyncBlockShadowMesh`) and only mark it dirty for rebuild through Vibrancy's own internal
+tracking. That tracking can miss a rebuild in some neighbour-block-removal cases, leaving the
+occluder mesh referencing geometry that no longer exists — so the shadow/light keeps rendering
+the old state. Destroying and replacing the light source works around this because it goes
+through a different path (`LightManager.blockChanged` → remove + recreate the `RayPointLight`
+from scratch, building a brand new mesh).
 
 ## The fix
 
-This mod adds a single mixin into `LightManager.blockChanged` — the exact same entrypoint Vibrancy
-itself already uses to react to block changes — and unconditionally calls `.reload()` (which just
-calls `queueMesh()`) on every currently-loaded `RayPointLight`. This sidesteps the fragile
-dirty-section bookkeeping entirely. `queueMesh()` is cheap (it just flips a boolean the light
-already polls once per frame on its own thread pool), so doing this on every block change is safe.
+This mod adds a single mixin into `LightManager.blockChanged` — the exact same entrypoint
+Vibrancy itself already uses to react to block changes — and unconditionally calls `.reload()`
+on every currently-loaded `RayPointLight`. `reload()` just flips a flag the light already polls
+once per frame on its own, so doing this on every block change is cheap and safe, and it
+sidesteps whatever internal bookkeeping missed the update.
 
 See [`LightManagerBlockChangedMixin.java`](src/main/java/net/kintil/vibrancyfixblock/mixin/LightManagerBlockChangedMixin.java)
-for the implementation and a longer explanation in the class javadoc.
+for the implementation.
 
 ## Requirements
 
@@ -48,24 +45,48 @@ at runtime, so all of them must already be installed.
 
 ## Building it yourself
 
-This repo intentionally does **not** hardcode exact dependency version numbers for Vibrancy,
-Sodium, and Big Shot Lib, because those get updated independently of Minecraft/loader versions
-and a stale pin would silently start failing to resolve. Before your first build:
+Vibrancy and Big Shot Lib's 1.21.11 Fabric builds aren't (yet) published on Modrinth's public
+Maven, and Sodium is under the Polyform Shield license, which makes casually redistributing it
+from a third-party Maven something this repo intentionally avoids. So instead of resolving
+these automatically, the build expects you to provide the exact jars you already run in-game.
 
-1. Open `gradle.properties`.
-2. For each of `vibrancy_version`, `sodium_version`, and `big_shot_lib_version`, visit the
-   corresponding Modrinth page filtered to Fabric + 1.21.11, open the newest listed version, and
-   copy the **version number** shown on that version's page (not the display title):
-   - https://modrinth.com/mod/vibrancy/versions?l=fabric&g=1.21.11
-   - https://modrinth.com/mod/sodium/versions?l=fabric&g=1.21.11
-   - https://modrinth.com/mod/big-shot-lib/versions?l=fabric&g=1.21.11
-3. Save the file, then build:
+### Local build
 
-```bash
-./gradlew build
-```
+1. Create a `libs/` folder in the project root (it's git-ignored, so this is safe).
+2. Copy in the three jars you already use in your `mods` folder:
+   - `vibrancy-fabric-*.jar`
+   - `sodium-fabric-*.jar`
+   - `big_shot_lib-*.jar` (also referred to as "Big Shot Rendering Library")
+
+   (Matching is by filename prefix, so exact version numbers in the filename don't matter.)
+3. Build:
+
+   ```bash
+   ./gradlew build
+   ```
 
 The output jar will be in `build/libs/`.
+
+### CI (GitHub Actions)
+
+Since these jars can't be committed to the repo or pulled from a public Maven, CI downloads
+them from a GitHub Release *in this repo* that you create and maintain yourself:
+
+1. Create a release in this repo tagged `vendor-libs-v1` (any non-published/draft-free release
+   works; it doesn't need to be marked "latest").
+2. Attach the same three jars (`vibrancy-fabric-*.jar`, `sodium-fabric-*.jar`,
+   `big_shot_lib-*.jar`) as release assets.
+3. Push — the `Build` workflow (`.github/workflows/build.yml`) downloads them from that release
+   into `libs/` before compiling.
+
+If you ever update to a newer Vibrancy/Sodium/Big Shot Lib build, just re-upload updated assets
+to that same `vendor-libs-v1` release (or bump the `VENDOR_LIBS_TAG` env var in the workflow if
+you'd rather create a new tag).
+
+**Note on licensing:** you are responsible for making sure you're allowed to re-upload these
+jars under their respective licenses (Vibrancy and Big Shot Lib are MIT; Sodium is Polyform
+Shield 1.0.0). This repo never mirrors them itself — only you, by attaching them to your own
+release, so please double check Polyform Shield's terms before doing so if you're unsure.
 
 ## Installing
 
